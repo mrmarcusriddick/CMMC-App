@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cmmc
+      POSTGRES_USER: cmmc
+      POSTGRES_PASSWORD: cmmc
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmmc -d cmmc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  api:
+    build: ./backend
+    env_file: .env
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+  web:
+    build: ./frontend
+    ports: ["5173:80"]
+    depends_on: [api]
+volumes:
+  postgres_data:
