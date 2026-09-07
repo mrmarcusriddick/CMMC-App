@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     remediation_enabled: bool = False
     approval_webhook_shared_secret: str = ""
     cors_origins: str = "http://localhost:5173"
+    app_username: str = "localadmin"
+    app_password: str = ""
+    session_cookie_secure: bool = False
 
 
 @lru_cache

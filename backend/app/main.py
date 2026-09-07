@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 from .assessment import AUTOMATED_CHECKS, _canonical_hash
+from .auth import protect_api, router as auth_router
+from .screenshot_validation import read_image
 from .catalog import seed_catalog
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_session, migrate_existing_schema
@@ -18,6 +20,8 @@ from .models import AssessmentObjective, AssessmentRun, AuditEvidenceReview, Cha
 from .remediation import build_remediation_request, execution_allowed, expiry
 
 app = FastAPI(title="CMMC Tenant Readiness API", version="0.1.0")
+app.middleware("http")(protect_api)
+app.include_router(auth_router)
 app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origins.split(","), allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 
@@ -209,14 +213,10 @@ async def upload_screenshot(request: Request, title: str = "", objective_identif
     content_type = (request.headers.get("content-type") or "").split(";", 1)[0].lower()
     if content_type not in {"image/png", "image/jpeg"}:
         raise HTTPException(415, "Only PNG and JPEG screenshots are accepted.")
-    image_data = await request.body()
-    if not image_data:
-        raise HTTPException(422, "Screenshot data is required.")
-    if len(image_data) > 20 * 1024 * 1024:
-        raise HTTPException(413, "Screenshots must be 20 MB or smaller.")
+    image_data = await read_image(request, content_type)
     if related_record_type and related_record_type not in {"ASSESSMENT", "ACCOUNT", "ASSET", "CHANGE", "POAM", "POLICY_EXCEPTION"}:
         raise HTTPException(422, "Unsupported related record type.")
-    item = ScreenshotEvidence(title=normalized_title, objective_identifier=objective_identifier.strip() if objective_identifier else None, related_record_type=related_record_type, related_record_id=related_record_id.strip() if related_record_id else None, captured_by=captured_by.strip() if captured_by else None, contains_cui=contains_cui, notes=notes.strip() if notes else None, content_type=content_type, byte_size=len(image_data), sha256=hashlib.sha256(image_data).hexdigest(), image_data=image_data)
+    item = ScreenshotEvidence(title=normalized_title, objective_identifier=objective_identifier.strip() if objective_identifier else None, related_record_type=related_record_type, related_record_id=related_record_id.strip() if related_record_id else None, captured_by=get_settings().app_username, contains_cui=contains_cui, notes=notes.strip() if notes else None, content_type=content_type, byte_size=len(image_data), sha256=hashlib.sha256(image_data).hexdigest(), image_data=image_data)
     session.add(item)
     session.commit()
     session.refresh(item)

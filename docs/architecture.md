@@ -26,4 +26,4 @@ Finding → remediation proposal → two MFA approvals → limited execution win
 
 ## Production hardening
 
-Run database migrations rather than metadata creation, store evidence payloads in encrypted object storage where required, sign the evidence-chain root with a Key Vault key, authenticate the dashboard, and implement Graph change-control / rollback validation for each write template.
+The local dashboard now uses a single-operator password and a one-hour signed HttpOnly session cookie. All API records and evidence downloads require that session; Docker binds published ports to loopback. For shared deployment, replace the local gate with organizational SSO and role-based access, enable HTTPS and secure cookies, run database migrations rather than metadata creation, store evidence payloads in encrypted object storage where required, sign the evidence-chain root with a Key Vault key, and implement Graph change-control / rollback validation for each write template.

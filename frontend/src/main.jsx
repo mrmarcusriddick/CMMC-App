@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './operations.css';
+import { captureStill } from './capture.mjs';
 
 const navGroups = [
   { label: 'WORKSPACE', items: [['overview', '◈', 'Overview'], ['assessments', '▤', 'Assessment runs'], ['evidence', '▧', 'Evidence vault'], ['screenshots', '▣', 'Capture evidence']] },
@@ -21,6 +22,10 @@ function Status({ value }) { return <span className={`status status-${(value || 
 function Empty({ title, body }) { return <div className="empty"><div>◌</div><h3>{title}</h3><p>{body}</p></div>; }
 
 function App() {
+  const [session, setSession] = useState(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [loginForm, setLoginForm] = useState({ username: 'localadmin', password: '' });
+  const [signingIn, setSigningIn] = useState(false);
   const [page, setPage] = useState('overview');
   const [summary, setSummary] = useState(null);
   const [overview, setOverview] = useState(null);
@@ -47,12 +52,39 @@ function App() {
   const [error, setError] = useState('');
 
   async function loadData() {
+    const access = await fetch('/api/session');
+    if (access.status === 401) { setSession(null); return; }
+    if (!access.ok) throw new Error('Local sign-in service is unavailable.');
     const values = await Promise.all(['/api/catalog/summary', '/api/dashboard/overview', '/api/assessments', '/api/evidence', '/api/poam', '/api/exceptions', '/api/accounts', '/api/inventory', '/api/changes', '/api/screenshots'].map(url => fetch(url).then(response => response.ok ? response.json() : null).catch(() => null)));
     const [catalog, dash, runList, evidenceList, poamList, exceptionList, accountList, assetList, changeList, screenshotList] = values;
     if (!catalog || !dash) setError('Some local dashboard data could not be loaded.');
     setSummary(catalog); setOverview(dash); setAssessments(runList?.items || []); setEvidence(evidenceList?.items || []); setPoam(poamList?.items || []); setExceptions(exceptionList?.items || []); setAccounts(accountList?.items || []); setAssets(assetList?.items || []); setChanges(changeList?.items || []); setScreenshots(screenshotList?.items || []);
   }
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    fetch('/api/session').then(async response => {
+      if (response.ok) { setSession(await response.json()); await loadData(); }
+      else if (response.status !== 401) setError('Local sign-in service is unavailable.');
+    }).catch(() => setError('The local app could not be reached.')).finally(() => setCheckingSession(false));
+  }, []);
+
+  async function signIn(event) {
+    event.preventDefault(); setError(''); setSigningIn(true);
+    try {
+      const response = await fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Sign-in failed.');
+      setSession(data); setLoginForm({ username: loginForm.username, password: '' }); await loadData();
+    } catch (err) { setError(err.message); }
+    finally { setSigningIn(false); }
+  }
+
+  async function signOut() {
+    try {
+      const response = await fetch('/api/session', { method: 'DELETE' });
+      if (!response.ok && response.status !== 401) throw new Error('Sign-out failed. Please try again.');
+      window.location.reload();
+    } catch (err) { setError(err.message); }
+  }
 
   async function runAssessment(event) {
     event.preventDefault(); setError(''); setMessage(''); setRunResult(null);
@@ -131,24 +163,8 @@ function App() {
     if (title.length < 3) return setError('Enter a screenshot title before starting capture.');
     if (!navigator.mediaDevices?.getDisplayMedia) return setError('Screen capture is not supported by this browser. Use a current desktop browser and select a screen, window, or tab.');
     setCapturing(true); setError(''); setMessage('');
-    let stream;
-    let video;
     try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      video = document.createElement('video');
-      video.srcObject = stream;
-      video.muted = true;
-      await video.play();
-      if (video.readyState < 2) await new Promise(resolve => { video.onloadeddata = resolve; });
-      const width = Math.min(video.videoWidth, 2560);
-      const height = Math.max(1, Math.round(video.videoHeight * (width / video.videoWidth)));
-      const canvas = document.createElement('canvas');
-      canvas.width = width; canvas.height = height;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('The browser could not prepare the capture image.');
-      context.drawImage(video, 0, 0, width, height);
-      const image = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      if (!image) throw new Error('The browser did not return a screenshot image.');
+      const image = await captureStill();
       const params = new URLSearchParams({ title, contains_cui: String(screenshotForm.containsCui) });
       if (screenshotForm.objectiveIdentifier) params.set('objective_identifier', screenshotForm.objectiveIdentifier);
       if (screenshotForm.relatedRecordType) params.set('related_record_type', screenshotForm.relatedRecordType);
@@ -163,8 +179,6 @@ function App() {
       const messageText = captureError?.name === 'NotAllowedError' ? 'Screen capture was cancelled or not permitted. No screenshot was saved.' : (captureError?.message || 'Screenshot capture could not complete.');
       setError(messageText);
     } finally {
-      stream?.getTracks().forEach(track => track.stop());
-      if (video) video.srcObject = null;
       setCapturing(false);
     }
   }
@@ -181,9 +195,12 @@ function App() {
   const counts = overview?.findings || { compliant: 0, manualReview: 0, nonCompliant: 0 };
   const runningFindings = runResult?.findings || [];
 
+  if (checkingSession) return <main className="login-page"><p>Opening local workspace…</p></main>;
+  if (!session) return <main className="login-page"><form className="panel login-panel" onSubmit={signIn}><h1>CMMC Compass</h1><p>Sign in to access your local records and evidence.</p>{error && <div className="alert error-alert">{error}</div>}<label>Username<input autoComplete="username" value={loginForm.username} onChange={event => setLoginForm({ ...loginForm, username: event.target.value })} required/></label><label>Password<input type="password" autoComplete="current-password" value={loginForm.password} onChange={event => setLoginForm({ ...loginForm, password: event.target.value })} required/></label><button type="submit" disabled={signingIn}>{signingIn ? 'Signing in…' : 'Sign in'}</button></form></main>;
+
   return <div className="shell">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">◇</span><div><b>CMMC Compass</b><small>Tenant readiness</small></div></div><nav>{navGroups.map(group => <div className="nav-group" key={group.label}><p>{group.label}</p>{group.items.map(([id, icon, label]) => <button key={id} className={page === id ? 'nav-item active' : 'nav-item'} onClick={() => { setPage(id); setQuery(''); }}><span>{icon}</span>{label}{id === 'assessments' && <em>{assessments.length}</em>}{id === 'evidence' && <em>{evidence.length}</em>}{id === 'screenshots' && <em>{screenshots.length}</em>}{id === 'accounts' && <em>{accounts.length}</em>}{id === 'changes' && <em>{changes.length}</em>}{id === 'software' && <em>{assets.filter(item => item.assetType === 'SOFTWARE').length}</em>}{id === 'hardware' && <em>{assets.filter(item => item.assetType === 'HARDWARE').length}</em>}{id === 'poam' && <em>{poam.length}</em>}{id === 'exceptions' && <em>{exceptions.length}</em>}</button>)}</div>)}</nav><div className="sidebar-footer"><span className="dot"/> GCC High connected<br/><small>Read-only discovery</small></div></aside>
-    <main className="workspace"><header className="topbar"><div><span className="eyebrow">CMMC LEVEL 2 · GCC HIGH</span><h1>{pageTitle}</h1></div><div className="toolbar"><label className="search">⌕<input value={query} onChange={event => setQuery(event.target.value)} placeholder={page === 'evidence' ? 'Search evidence' : 'Search records'}/></label><button className="export" onClick={() => setPage('evidence')}>⇩ Evidence exports</button></div></header>
+    <main className="workspace"><header className="topbar"><div><span className="eyebrow">CMMC LEVEL 2 · GCC HIGH</span><h1>{pageTitle}</h1></div><div className="toolbar"><label className="search">⌕<input value={query} onChange={event => setQuery(event.target.value)} placeholder={page === 'evidence' ? 'Search evidence' : 'Search records'}/></label><button className="export" onClick={() => setPage('evidence')}>⇩ Evidence exports</button><button className="export" onClick={signOut}>Sign out</button></div></header>
       {summary?.framework?.status === 'SOURCE_VALIDATED' && <div className="baseline"><b>Source-validated baseline</b><span>CMMC Level 2 v{summary.framework.version} · 110 practices · 320 objectives</span></div>}
       {error && <div className="alert error-alert">{error}</div>}{message && <div className="alert success-alert">{message}</div>}
       {page === 'overview' && <>
@@ -202,7 +219,7 @@ function App() {
       {page === 'accounts' && <section className="sync-panel"><div><b>Microsoft Entra synchronization</b><small>{accounts.filter(item => item.source?.startsWith('Microsoft Graph')).length} of {accounts.length} records synchronized from Microsoft Graph. Reads users and active directory-role memberships; it preserves assessor-entered MFA and review data.</small></div><button className="sync-button" onClick={() => syncFromTenant('accounts')}>↻ Sync from tenant</button></section>}
       {['software','hardware'].includes(page) && <section className="sync-panel"><div><b>Microsoft Intune synchronization</b><small>{filteredAssets(currentAssetType).filter(item => item.source?.startsWith('Microsoft Graph')).length} displayed records synchronized from Microsoft Graph. Reads managed devices, detected apps, and the Intune managed-app catalog; it never changes tenant assets.</small></div><button className="sync-button" onClick={() => syncFromTenant('inventory')}>↻ Sync from tenant</button></section>}
       {page === 'changes' && <><section className="panel record-form-panel"><div className="panel-head"><div><h2>Record planned change</h2><p>Approval-driven local record. It can be linked to inventory and POA&M work, but never executes a tenant change.</p></div><Status value="DRAFT"/></div><form className="record-grid" onSubmit={createChange}><label>Change title<input required minLength="3" value={changeForm.title} onChange={event => setChangeForm({...changeForm, title: event.target.value})} placeholder="Describe the planned change"/></label><label>Owner<input value={changeForm.owner} onChange={event => setChangeForm({...changeForm, owner: event.target.value})} placeholder="Implementation owner"/></label><label>Change type<select value={changeForm.changeType} onChange={event => setChangeForm({...changeForm, changeType: event.target.value})}>{['STANDARD','NORMAL','EMERGENCY'].map(value => <option key={value}>{value}</option>)}</select></label><label>Risk level<select value={changeForm.riskLevel} onChange={event => setChangeForm({...changeForm, riskLevel: event.target.value})}>{['LOW','MEDIUM','HIGH','CRITICAL'].map(value => <option key={value}>{value}</option>)}</select></label><label>Status<select value={changeForm.status} onChange={event => setChangeForm({...changeForm, status: event.target.value})}>{['DRAFT','SUBMITTED','APPROVED','SCHEDULED','IMPLEMENTING','CLOSED','REJECTED','CANCELLED'].map(value => <option key={value}>{value}</option>)}</select></label><label>Approver<input value={changeForm.approver} onChange={event => setChangeForm({...changeForm, approver: event.target.value})} placeholder="Approver, when assigned"/></label><label>Planned start<input type="date" value={changeForm.plannedStartAt} onChange={event => setChangeForm({...changeForm, plannedStartAt: event.target.value})}/></label><label>Planned end<input type="date" value={changeForm.plannedEndAt} onChange={event => setChangeForm({...changeForm, plannedEndAt: event.target.value})}/></label><label>Linked asset<select value={changeForm.assetId} onChange={event => setChangeForm({...changeForm, assetId: event.target.value})}><option value="">No linked asset</option>{assets.map(item => <option key={item.id} value={item.id}>{item.name} · {item.assetIdentifier}</option>)}</select></label><label>Linked POA&M<select value={changeForm.poamItemId} onChange={event => setChangeForm({...changeForm, poamItemId: event.target.value})}><option value="">No linked POA&M item</option>{poam.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label><label className="wide">Description<textarea value={changeForm.description} onChange={event => setChangeForm({...changeForm, description: event.target.value})} placeholder="Scope, expected impact, and validation approach"/></label><label>Rollback plan<textarea value={changeForm.rollbackPlan} onChange={event => setChangeForm({...changeForm, rollbackPlan: event.target.value})} placeholder="Steps to safely reverse the change"/></label><label>Evidence reference<textarea value={changeForm.evidenceReference} onChange={event => setChangeForm({...changeForm, evidenceReference: event.target.value})} placeholder="Ticket, approval, test, or implementation evidence"/></label><button>Create change record</button></form></section><section className="panel table-panel"><div className="panel-head"><div><h2>Change register</h2><p>{filteredChanges.length} approval-driven records.</p></div></div>{filteredChanges.length ? <table><thead><tr><th>Change</th><th>Owner</th><th>Risk</th><th>Status</th><th>Linked record</th><th>Planned</th></tr></thead><tbody>{filteredChanges.map(item => <tr key={item.id}><td><b>{item.title}</b><small>{statusText(item.changeType)}</small></td><td>{item.owner || '—'}</td><td><Status value={item.riskLevel}/></td><td><Status value={item.status}/></td><td>{item.assetName || item.poamTitle || '—'}</td><td>{fmt(item.plannedStartAt)}</td></tr>)}</tbody></table> : <Empty title="No change records" body="Record proposed changes before implementation so approvals, rollback planning, and evidence remain traceable."/>}</section></>}
-      {page === 'screenshots' && <><section className="panel record-form-panel"><div className="panel-head"><div><h2>Capture screenshot evidence</h2><p>Select a screen, window, or browser tab when prompted. Capture is always user initiated and the selected image is saved only after you approve it.</p></div><Status value="USER_APPROVED"/></div><div className="record-grid"><label>Evidence title<input required minLength="3" value={screenshotForm.title} onChange={event => setScreenshotForm({...screenshotForm, title: event.target.value})} placeholder="e.g., Conditional Access policy review"/></label><label>CMMC objective <small>Optional</small><input value={screenshotForm.objectiveIdentifier} onChange={event => setScreenshotForm({...screenshotForm, objectiveIdentifier: event.target.value})} placeholder="e.g., AC.L2-3.1.1[a]"/></label><label>Captured by<input value={screenshotForm.capturedBy} onChange={event => setScreenshotForm({...screenshotForm, capturedBy: event.target.value})} placeholder="Reviewer name"/></label><label>Related record type<select value={screenshotForm.relatedRecordType} onChange={event => setScreenshotForm({...screenshotForm, relatedRecordType: event.target.value})}><option value="">No related record</option>{['ASSESSMENT','ACCOUNT','ASSET','CHANGE','POAM','POLICY_EXCEPTION'].map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Related record ID <small>Optional local record ID</small><input value={screenshotForm.relatedRecordId} onChange={event => setScreenshotForm({...screenshotForm, relatedRecordId: event.target.value})} placeholder="Local record UUID, if linking to a register item"/></label><label className="wide">Capture notes<textarea value={screenshotForm.notes} onChange={event => setScreenshotForm({...screenshotForm, notes: event.target.value})} placeholder="State what the screen demonstrates and the review context"/></label><label className="check-label"><input type="checkbox" checked={screenshotForm.containsCui} onChange={event => setScreenshotForm({...screenshotForm, containsCui: event.target.checked})}/> This screenshot contains CUI</label><button className="capture-button" type="button" disabled={capturing} onClick={captureScreenshot}>{capturing ? 'Waiting for capture…' : '▣ Capture screenshot'}</button></div></section><section className="panel"><div className="panel-head"><div><h2>Screenshot evidence gallery</h2><p>{screenshots.length} locally hashed capture{screenshots.length === 1 ? '' : 's'}.</p></div></div>{screenshots.length ? <div className="screenshot-grid">{screenshots.map(item => <article className="screenshot-card" key={item.id}><a href={`/api/screenshots/${item.id}/content`} target="_blank" rel="noreferrer"><img src={`/api/screenshots/${item.id}/content`} alt={item.title}/></a><div><b>{item.title}</b><small>{item.objectiveIdentifier || 'No objective linked'} · {fmt(item.capturedAt)}</small><small>SHA-256 {item.sha256.slice(0, 16)}… · {Math.ceil(item.byteSize / 1024)} KB</small>{item.containsCui && <Status value="CUI"/>}</div></article>)}</div> : <Empty title="No screenshots captured" body="Enter evidence metadata, then use Capture screenshot to select the exact screen, window, or tab to retain."/>}</section></>}
+      {page === 'screenshots' && <><section className="panel record-form-panel"><div className="panel-head"><div><h2>Capture screenshot evidence</h2><p>Select a screen, window, or browser tab when prompted. After you select a source, one still image is saved. Screen sharing stops before upload begins.</p></div><Status value="USER_APPROVED"/></div><div className="record-grid"><label>Evidence title<input required minLength="3" value={screenshotForm.title} onChange={event => setScreenshotForm({...screenshotForm, title: event.target.value})} placeholder="e.g., Conditional Access policy review"/></label><label>CMMC objective <small>Optional</small><input value={screenshotForm.objectiveIdentifier} onChange={event => setScreenshotForm({...screenshotForm, objectiveIdentifier: event.target.value})} placeholder="e.g., AC.L2-3.1.1[a]"/></label><label>Captured by<input value={session.username} readOnly/></label><label>Related record type<select value={screenshotForm.relatedRecordType} onChange={event => setScreenshotForm({...screenshotForm, relatedRecordType: event.target.value})}><option value="">No related record</option>{['ASSESSMENT','ACCOUNT','ASSET','CHANGE','POAM','POLICY_EXCEPTION'].map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Related record ID <small>Optional local record ID</small><input value={screenshotForm.relatedRecordId} onChange={event => setScreenshotForm({...screenshotForm, relatedRecordId: event.target.value})} placeholder="Local record UUID, if linking to a register item"/></label><label className="wide">Capture notes<textarea value={screenshotForm.notes} onChange={event => setScreenshotForm({...screenshotForm, notes: event.target.value})} placeholder="State what the screen demonstrates and the review context"/></label><label className="check-label"><input type="checkbox" checked={screenshotForm.containsCui} onChange={event => setScreenshotForm({...screenshotForm, containsCui: event.target.checked})}/> This screenshot contains CUI</label><button className="capture-button" type="button" disabled={capturing} onClick={captureScreenshot}>{capturing ? 'Waiting for capture…' : '▣ Capture screenshot'}</button></div></section><section className="panel"><div className="panel-head"><div><h2>Screenshot evidence gallery</h2><p>{screenshots.length} locally hashed capture{screenshots.length === 1 ? '' : 's'}.</p></div></div>{screenshots.length ? <div className="screenshot-grid">{screenshots.map(item => <article className="screenshot-card" key={item.id}><a href={`/api/screenshots/${item.id}/content`} target="_blank" rel="noreferrer"><img src={`/api/screenshots/${item.id}/content`} alt={item.title}/></a><div><b>{item.title}</b><small>{item.objectiveIdentifier || 'No objective linked'} · {fmt(item.capturedAt)}</small><small>SHA-256 {item.sha256.slice(0, 16)}… · {Math.ceil(item.byteSize / 1024)} KB</small>{item.containsCui && <Status value="CUI"/>}</div></article>)}</div> : <Empty title="No screenshots captured" body="Enter evidence metadata, then use Capture screenshot to select the exact screen, window, or tab to retain."/>}</section></>}
     </main>
   </div>;
 }

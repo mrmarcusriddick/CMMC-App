@@ -19,10 +19,21 @@ A secure, local-first CMMC Level 2 assessment application for Azure and Microsof
 
 ```powershell
 Copy-Item .env.example .env
+./scripts/Initialize-LocalAccess.ps1
 docker compose up --build
 ```
 
 Open `http://localhost:5173` for the dashboard and `http://localhost:8000/docs` for the API. The default local database is PostgreSQL in Docker. For development outside Docker, set `DATABASE_URL=sqlite:///./cmmc.db`.
+
+Sign in with `APP_USERNAME` and `APP_PASSWORD` from your local `.env`. The initialization script generates a random password and preserves existing credentials; it never prints the password. The API refuses sign-in when the password is missing or shorter than 24 characters. Keep `.env` untracked.
+
+Both published ports bind only to `127.0.0.1`. All `/api/` records, image downloads, and exports require a one-hour HttpOnly, SameSite=Strict session cookie. Sign out clears that browser's cookie; rotating `APP_PASSWORD` and restarting the API invalidates all existing sessions. This is a single-operator local access gate, not per-user authorization or organizational SSO. Shared hosting requires HTTPS (`SESSION_COOKIE_SECURE=true`), organizational authentication, and role-based authorization. API documentation and the generic health response contain no assessment data and remain public.
+
+## Screenshot evidence
+
+Use **Capture evidence**, enter a title, then select a screen, window, or tab in the browser picker. Sharing stops immediately after the still frame is copied, before PNG encoding and upload. There is no second preview/approval step. Captures retain their original uploaded bytes and SHA-256 hash; the server validates image contents, limits size to 20 MB and dimensions to 16 million pixels, and records the signed-in operator. The CUI checkbox is metadata and does not add encryption or a separate access policy.
+
+Frontend capture lifecycle tests run with `cd frontend; npm test`. Backend tests in `backend/tests` require pytest and the backend requirements; run `python -m pytest tests` from `backend` with an isolated SQLite `DATABASE_URL`. The screenshot API tests use their own in-memory database, not the live evidence database.
 
 ## Tenant access
 
