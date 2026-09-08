@@ -1,0 +1,23 @@
+.poam-workspace { display: grid; gap: 20px; min-width: 0; }
+.poam-panel { padding: 24px; min-width: 0; overflow-wrap: anywhere; }
+.poam-panel fieldset { border: 0; padding: 0; min-width: 0; }
+.poam-panel input, .poam-panel select, .poam-panel textarea { font: inherit; border: 1px solid #cfd8e6; border-radius: 7px; padding: 10px; min-width: 0; }
+.poam-panel textarea { min-height: 90px; resize: vertical; }
+.poam-panel button { border: 1px solid #cfd8e6; border-radius: 7px; background: #edf3fc; color: #224a83; padding: 10px 14px; font: inherit; cursor: pointer; }
+.poam-panel button:disabled { opacity: .5; cursor: default; }
+.poam-panel h3 { margin-top: 24px; }
+.poam-panel label:not(.poam-check) { display: grid; gap: 7px; margin: 12px 0; }
+.poam-panel small { display: block; overflow-wrap: anywhere; }
+.poam-register { display: grid; gap: 8px; max-height: 380px; overflow: auto; }
+.poam-register button { text-align: left; display: grid; gap: 6px; background: #f5f8fc; color: #24364b; border: 1px solid #d7e1eb; white-space: normal; }
+.poam-register button[aria-pressed=true] { border-color: #2563eb; background: #eaf1ff; }
+.poam-check { display: flex; align-items: center; gap: 9px; margin: 12px 0; }
+.poam-check input, .poam-milestone input[type=checkbox] { width: auto; flex: 0 0 auto; }
+.poam-milestone { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+.poam-milestone input:not([type=checkbox]) { min-width: 0; flex: 1; }
+.poam-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.poam-evidence { max-height: 240px; overflow: auto; }
+.poam-panel details { border-top: 1px solid #d7e1eb; padding: 14px 0; }
+.poam-panel summary { cursor: pointer; }
+body:has(.poam-workspace) .search { display: none; }
+@media (max-width: 700px) { .poam-panel { padding: 16px; } .poam-panel .panel-head { align-items: flex-start; flex-wrap: wrap; gap: 12px; } }

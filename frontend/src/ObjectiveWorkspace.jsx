@@ -6,7 +6,7 @@ const date = value => value ? new Date(value.endsWith('Z') || /[+-]\d\d:\d\d$/.t
 const key = item => `${item.kind}:${item.id}`;
 const fromHash = () => new URLSearchParams(window.location.hash.split('?')[1] || '');
 
-export default function ObjectiveWorkspace({ runs, onAuthExpired, onDirty, onRecordsChanged }) {
+export default function ObjectiveWorkspace({ runs, onAuthExpired, onDirty, onRecordsChanged, onOpenPoam }) {
   const [runId, setRunId] = useState(() => fromHash().get('run') || runs[0]?.id || '');
   const [identifier, setIdentifier] = useState(() => fromHash().get('objective') || '');
   const [catalog, setCatalog] = useState(null);
@@ -129,6 +129,7 @@ export default function ObjectiveWorkspace({ runs, onAuthExpired, onDirty, onRec
     </aside><article className="objective-detail">
       {!detail && <div className="panel objective-context">{loading ? 'Loading objective…' : 'Select an objective to review its requirements and evidence.'}</div>}
       {detail && draft && <>
+        {!!detail.rereviewRequests?.length && <p role="status" className="alert">A linked gap has closed. Review its closure evidence and save a new completed review. Your previous decision remains unchanged.</p>}
         <section className="panel objective-context"><span className="eyebrow">{detail.framework.version ? `CMMC v${detail.framework.version}` : 'Unverified seed catalog'} · {text(detail.framework.status)}</span><h2>{detail.identifier}</h2><h3>{detail.practiceTitle}</h3><p className="objective-statement">{detail.statement}</p>
           {detail.practiceStatement && <details><summary>Practice requirement</summary><p>{detail.practiceStatement}</p></details>}
           {detail.framework.sourceUrl?.startsWith('https://') && <a href={detail.framework.sourceUrl} target="_blank" rel="noreferrer">Catalog source ↗</a>}
@@ -151,7 +152,7 @@ export default function ObjectiveWorkspace({ runs, onAuthExpired, onDirty, onRec
             {!resources.items.length && <p>No matching resources.</p>}{resources.hasMore && <p>Showing 100 matches. Narrow your search to find more.</p>}
           </details><button className="objective-primary" type="submit" disabled={!dirty}>{busy ? 'Saving…' : 'Save review'}</button></fieldset>
         </form>
-        <section className="panel objective-context"><h2>Linked POA&M items</h2>{detail.poam.map(item => <div className="objective-resource" key={item.id}><div><b>{item.title}</b><small>{text(item.status)} · {item.owner || 'Unassigned'} · Due {item.targetDate ? date(item.targetDate) : 'not set'}</small><small>Record {item.id}</small></div></div>)}{!detail.poam.length && <p>No linked POA&M items.</p>}
+        <section className="panel objective-context"><h2>Linked POA&M items</h2>{detail.poam.map(item => <div className="objective-resource" key={item.id}><div><button onClick={() => onOpenPoam(item.id)}>{item.title}</button><small>{text(item.status)} · {item.owner || 'Unassigned'} · Due {item.targetDate ? date(item.targetDate) : 'not set'}</small><small>Record {item.id}</small></div></div>)}{!detail.poam.length && <p>No linked POA&M items.</p>}
           {detail.review.decision === 'NOT_MET' ? <form onSubmit={createGap}><fieldset disabled={busy || dirty}><h3>Create a gap item</h3><div className="record-grid"><label>POA&M title<input required minLength={3} maxLength={240} value={gap.title} onChange={event => setGap({ ...gap, title: event.target.value })}/></label><label>Gap owner<input maxLength={200} value={gap.owner} placeholder={detail.review.owner} onChange={event => setGap({ ...gap, owner: event.target.value })}/></label><label>Target date<input type="date" value={gap.targetDate} onChange={event => setGap({ ...gap, targetDate: event.target.value })}/></label><label className="wide">Gap description<textarea value={gap.description} maxLength={20000} onChange={event => setGap({ ...gap, description: event.target.value })}/></label></div><button className="objective-primary" type="submit">Create linked POA&M</button></fieldset>{dirty && <p>Save the review before creating a gap item.</p>}</form> : <p>Save a Not met decision to create a linked gap item.</p>}
         </section>
         <section className="panel objective-context"><h2>Review history</h2>{!detail.history.length && <p>No review revisions yet.</p>}{detail.history.map(item => <details key={item.revision} className="objective-history"><summary>Revision {item.revision} · {text(item.status)} · {text(item.decision)} · {date(item.recordedAt)}</summary><p>Recorded by {item.recordedBy} · Owner: {item.owner || 'Unassigned'}</p><p className="objective-notes">{item.notes || 'No notes.'}</p><ul>{item.resources.map(ref => <li key={key(ref)}>{ref.label} ({text(ref.kind)}){ref.sha256 && <code>SHA-256 {ref.sha256}</code>}</li>)}</ul></details>)}</section>

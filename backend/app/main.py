@@ -13,6 +13,7 @@ from .auth import protect_api, router as auth_router
 from .screenshot_validation import read_image
 from .objectives import router as objectives_router
 from .reporting import router as reporting_router
+from .poam_workflow import router as poam_router
 from .catalog import seed_catalog
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_session, migrate_existing_schema
@@ -26,6 +27,7 @@ app.middleware("http")(protect_api)
 app.include_router(auth_router)
 app.include_router(objectives_router)
 app.include_router(reporting_router)
+app.include_router(poam_router)
 app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origins.split(","), allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 
@@ -60,7 +62,7 @@ class PoamItemRequest(BaseModel):
     title: str = Field(min_length=3, max_length=240)
     description: str | None = Field(default=None, max_length=5000)
     owner: str | None = Field(default=None, max_length=200)
-    status: str = Field(default="OPEN", pattern="^(OPEN|IN_PROGRESS|BLOCKED|COMPLETE|CLOSED)$")
+    status: str = Field(default="OPEN", pattern="^(OPEN|IN_PROGRESS|BLOCKED)$")
     target_date: datetime | None = None
     milestones: list[str] = Field(default_factory=list, max_length=30)
     evidence_reference: str | None = Field(default=None, max_length=5000)
@@ -245,6 +247,8 @@ def list_poam(session: Session = Depends(get_session)) -> dict:
 
 @app.post("/api/poam", status_code=status.HTTP_201_CREATED)
 def create_poam_item(body: PoamItemRequest, session: Session = Depends(get_session)) -> dict:
+    if len(body.title.strip()) < 3 or any(not value.strip() or len(value.strip()) > 500 for value in body.milestones):
+        raise HTTPException(422, "Enter a title of at least three characters and milestone descriptions of 1–500 characters.")
     if body.finding_id and not session.get(Finding, body.finding_id):
         raise HTTPException(404, "The linked finding was not found.")
     item = PoamItem(
@@ -258,26 +262,6 @@ def create_poam_item(body: PoamItemRequest, session: Session = Depends(get_sessi
         evidence_reference=body.evidence_reference.strip() if body.evidence_reference else None,
     )
     session.add(item)
-    session.commit()
-    session.refresh(item)
-    return poam_out(item)
-
-
-@app.patch("/api/poam/{item_id}")
-def update_poam_item(item_id: str, body: PoamItemRequest, session: Session = Depends(get_session)) -> dict:
-    item = session.get(PoamItem, item_id)
-    if not item:
-        raise HTTPException(404, "POA&M item not found.")
-    if body.finding_id and not session.get(Finding, body.finding_id):
-        raise HTTPException(404, "The linked finding was not found.")
-    item.finding_id = body.finding_id
-    item.title = body.title.strip()
-    item.description = body.description.strip() if body.description else None
-    item.owner = body.owner.strip() if body.owner else None
-    item.status = body.status
-    item.target_date = body.target_date
-    item.milestones = [milestone.strip() for milestone in body.milestones if milestone.strip()]
-    item.evidence_reference = body.evidence_reference.strip() if body.evidence_reference else None
     session.commit()
     session.refresh(item)
     return poam_out(item)

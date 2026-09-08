@@ -241,6 +241,17 @@ class ObjectiveReviewRevision(Base):
     recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class PoamRevision(Base):
+    __tablename__ = "poam_revisions"
+    __table_args__ = (UniqueConstraint("poam_id", "revision", name="uq_poam_revision"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    poam_id: Mapped[str] = mapped_column(ForeignKey("poam_items.id"), index=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    recorded_by: Mapped[str] = mapped_column(String(200))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class ObjectivePoamLink(Base):
     __tablename__ = "objective_poam_links"
     __table_args__ = (UniqueConstraint("run_id", "objective_identifier", "request_key", name="uq_objective_poam_request"),)

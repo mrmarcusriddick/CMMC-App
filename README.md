@@ -35,6 +35,12 @@ Use **Capture evidence**, enter a title, then select a screen, window, or tab in
 
 Frontend capture lifecycle tests run with `cd frontend; npm test`. Backend tests in `backend/tests` require pytest and the backend requirements; run `python -m pytest tests` from `backend` with an isolated SQLite `DATABASE_URL`. The screenshot API tests use their own in-memory database, not the live evidence database.
 
+## POA&M management
+
+Open **POA&M** to filter gaps by status, owner/title/objective text, or overdue target date (UTC). Select a record to edit its owner, due date, milestones, and evidence reference. Objective and assessment-summary gap links open the same detail page. New standalone records begin open, in progress, or blocked; objective-linked gaps can be created from a saved Not met review.
+
+Completing or closing a gap requires an owner, completed milestones, closure notes, and an evidence reference or attached screenshot. Saves preserve revision history (including the original baseline on first edit) and reject stale updates. **Reload saved gap** retrieves another session's changes. Closing a linked gap adds its objective to the **Re-review after closure** summary queue until a later completed objective review is saved. Closure never changes technical findings or reviewer decisions automatically. History retains screenshot IDs, titles, and SHA-256 hashes. These are local workflow records, not tenant remediation actions.
+
 ## Objective reviews
 
 Open **Objective reviews** (or select it in the workspace menu on smaller screens), choose an assessment run, and select an objective. The list uses that run's catalog release; older runs without a release are explicitly labeled as unverified seed content. Filter by domain or review status, or search objective wording and owner.

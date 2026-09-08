@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import './summary.css';
 
 const label = value => (value || '').replaceAll('_', ' ').toLowerCase();
-const queueLabels = { all: 'All objectives', missingOwner: 'Missing owner', missingEvidence: 'No attachments', pendingDecision: 'Decision pending' };
+const queueLabels = { all: 'All objectives', missingOwner: 'Missing owner', missingEvidence: 'No attachments', pendingDecision: 'Decision pending', reReview: 'Re-review after closure' };
 const runDate = value => new Date(/[Zz]|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`).toLocaleString();
 
-export default function AssessmentSummary({ runs, onAuthExpired, onOpenObjective }) {
+export default function AssessmentSummary({ runs, onAuthExpired, onOpenObjective, onOpenPoam }) {
   const [runId, setRunId] = useState(() => new URLSearchParams(window.location.hash.split('?')[1] || '').get('run') || runs[0]?.id || '');
   const [report, setReport] = useState(null);
   const [error, setError] = useState('');
@@ -63,7 +63,7 @@ export default function AssessmentSummary({ runs, onAuthExpired, onOpenObjective
         <p>{visible.length} matching objectives</p><div className="summary-table summary-scroll"><table><thead><tr><th>Objective</th><th>Owner</th><th>Review status</th><th>Decision</th><th>Attachments</th></tr></thead><tbody>{visible.map(item => <tr key={item.identifier}><td>{objectiveLink(item.identifier)}<small>{item.statement}</small></td><td>{item.review.owner || 'Unassigned'}</td><td>{label(item.review.status)}</td><td>{label(item.review.decision)}{item.review.status !== 'COMPLETE' && item.review.decision !== 'NOT_ASSESSED' ? ' (provisional)' : ''}</td><td>{item.review.resources.length}</td></tr>)}</tbody></table></div>{!visible.length && <p>No objectives match this queue and filter.</p>}
       </section>
       <section className="panel summary-panel"><h2>Linked gaps and overdue actions</h2><p>{t.openGaps} open · {t.overdueGaps} overdue. Past-due dates use UTC; complete, closed, and cancelled items are excluded from overdue counts.</p><label className="summary-check"><input type="checkbox" checked={overdueOnly} onChange={event => setOverdueOnly(event.target.checked)}/> Show overdue only</label>
-        <div className="summary-table"><table><thead><tr><th>Gap</th><th>Objective</th><th>Owner</th><th>Status</th><th>Target date</th></tr></thead><tbody>{gaps.map(item => <tr key={item.id}><td>{item.title}{item.overdue && <strong className="summary-overdue">Overdue</strong>}<small>{item.id}</small></td><td>{objectiveLink(item.identifier)}</td><td>{item.owner || 'Unassigned'}</td><td>{label(item.status)}</td><td>{item.targetDate?.slice(0, 10) || 'Not set'}</td></tr>)}</tbody></table></div>{!gaps.length && <p>No {overdueOnly ? 'overdue ' : ''}linked gaps.</p>}
+        <div className="summary-table"><table><thead><tr><th>Gap</th><th>Objective</th><th>Owner</th><th>Status</th><th>Target date</th></tr></thead><tbody>{gaps.map(item => <tr key={item.id}><td><button onClick={() => onOpenPoam(item.id)}>{item.title}</button>{item.overdue && <strong className="summary-overdue">Overdue</strong>}<small>{item.id}</small></td><td>{objectiveLink(item.identifier)}</td><td>{item.owner || 'Unassigned'}</td><td>{label(item.status)}</td><td>{item.targetDate?.slice(0, 10) || 'Not set'}</td></tr>)}</tbody></table></div>{!gaps.length && <p>No {overdueOnly ? 'overdue ' : ''}linked gaps.</p>}
       </section>
       <section className="panel summary-panel"><h2>Technical discovery signals</h2><p>These findings are separate from the reviewer decisions above.</p><div className="summary-decisions">{Object.entries(technical).map(([status, count]) => <span key={status}>{label(status)} <b>{count}</b></span>)}</div>{!report.technicalFindings.length && <p>No technical findings for this run.</p>}</section>
       <p className="summary-updated">Generated {new Date(report.generatedAt).toLocaleString()}. Refresh to include reviews saved in another session.</p>

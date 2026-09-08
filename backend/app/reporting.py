@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, selectinload
 from .database import get_session
 from .models import AssessmentRun, Finding, ObjectivePoamLink, PoamItem
 from .objectives import list_objectives
+from .poam_workflow import rereview_requests
 
 router = APIRouter(prefix="/api/assessments")
 
@@ -51,7 +52,8 @@ def assessment_report(db: Session, run_id: str) -> dict:
         count = Counter(item["review"]["status"] for item in subset)
         domains.append({"domain": domain, "total": len(subset), "notStarted": count["NOT_STARTED"],
                         "inReview": count["IN_REVIEW"], "complete": count["COMPLETE"]})
-    queues = {"missingOwner": [], "missingEvidence": [], "pendingDecision": []}
+    queues = {"missingOwner": [], "missingEvidence": [], "pendingDecision": [],
+              "reReview": sorted({row["identifier"] for row in rereview_requests(db, run_id) if row["identifier"] in known})}
     for item in items:
         review = item["review"]
         if not review["owner"].strip():

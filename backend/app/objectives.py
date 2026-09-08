@@ -15,6 +15,8 @@ from .models import (AssessmentRun, AssessmentObjective, FrameworkAssessmentObje
                      Finding, EvidenceLog, ScreenshotEvidence, ManagedAccount, InventoryAsset, ChangeRecord,
                      PolicyException, ObjectiveReviewRevision, ObjectivePoamLink, PoamItem)
 
+from .poam_workflow import rereview_requests
+
 router = APIRouter(prefix="/api")
 ResourceKind = Literal["SCREENSHOT", "DISCOVERY", "ACCOUNT", "ASSET", "CHANGE", "POLICY_EXCEPTION"]
 RESOURCE_MODELS = {"SCREENSHOT": ScreenshotEvidence, "DISCOVERY": EvidenceLog, "ACCOUNT": ManagedAccount,
@@ -93,7 +95,7 @@ def objective_detail(run_id: str, identifier: str, db: Session = Depends(get_ses
     finding_ids = [item.id for item in findings]
     poam = db.scalars(select(PoamItem).where((PoamItem.id.in_(poam_ids)) | (PoamItem.finding_id.in_(finding_ids)))
                      .order_by(PoamItem.created_at.desc())).all()
-    return {"identifier": identifier, "statement": objective.statement, "practiceTitle": objective.practice.title,
+    return {"rereviewRequests": rereview_requests(db, run_id, identifier), "identifier": identifier, "statement": objective.statement, "practiceTitle": objective.practice.title,
             "practiceStatement": getattr(objective.practice, "statement", None), "runId": run.id, "tenantId": run.tenant_id,
             "framework": {"version": run.framework_release.version, "status": run.framework_release.status,
                           "sourceUrl": run.framework_release.source_url} if run.framework_release else {"status": "UNVERIFIED_SEED"},
