@@ -241,6 +241,26 @@ class ObjectiveReviewRevision(Base):
     recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class AuditReviewRevision(Base):
+    __tablename__ = "audit_review_revisions"
+    __table_args__ = (UniqueConstraint("run_id", "revision", name="uq_audit_review_revision"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    run_id: Mapped[str] = mapped_column(ForeignKey("assessment_runs.id"), index=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    recorded_by: Mapped[str] = mapped_column(String(200))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AuditGapLink(Base):
+    __tablename__ = "audit_gap_links"
+    __table_args__ = (UniqueConstraint("run_id", "request_key", name="uq_audit_gap_request"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    run_id: Mapped[str] = mapped_column(ForeignKey("assessment_runs.id"), index=True)
+    poam_id: Mapped[str] = mapped_column(ForeignKey("poam_items.id"), unique=True)
+    request_key: Mapped[str] = mapped_column(String(36))
+
+
 class PoamRevision(Base):
     __tablename__ = "poam_revisions"
     __table_args__ = (UniqueConstraint("poam_id", "revision", name="uq_poam_revision"),)

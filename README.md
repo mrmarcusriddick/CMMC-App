@@ -35,6 +35,14 @@ Use **Capture evidence**, enter a title, then select a screen, window, or tab in
 
 Frontend capture lifecycle tests run with `cd frontend; npm test`. Backend tests in `backend/tests` require pytest and the backend requirements; run `python -m pytest tests` from `backend` with an isolated SQLite `DATABASE_URL`. The screenshot API tests use their own in-memory database, not the live evidence database.
 
+## Audit reviews
+
+Open **Audit reviews** to select an assessment, assign its review owner, record retention and required event categories, and schedule the next review. Filter the queue by owner/tenant/run, conclusion, or overdue next-review date (UTC). The schedule is entered explicitly and does not send notifications or automatically roll dates forward.
+
+Attach discovery evidence from that assessment or relevant local screenshots. A Supported conclusion requires evidence, retention, frequency, event categories, an owner, and rationale; Gap and Not applicable require an owner and rationale. Each save records the operator, time, evidence references/hashes, and full review state. Earlier notes are retained as the original baseline on first edit. Concurrent stale saves are rejected; **Reload saved review** retrieves the latest state.
+
+A saved Gap conclusion can create a POA&M item linked to an AU objective in the assessment's catalog. It inherits the review owner and rationale; manage its milestones, evidence, and closure in POA&M. Audit conclusions do not automatically change technical findings or objective decisions. The assessment-run form now opens this workspace rather than maintaining a separate unversioned editor.
+
 ## POA&M management
 
 Open **POA&M** to filter gaps by status, owner/title/objective text, or overdue target date (UTC). Select a record to edit its owner, due date, milestones, and evidence reference. Objective and assessment-summary gap links open the same detail page. New standalone records begin open, in progress, or blocked; objective-linked gaps can be created from a saved Not met review.

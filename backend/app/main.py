@@ -14,6 +14,7 @@ from .screenshot_validation import read_image
 from .objectives import router as objectives_router
 from .reporting import router as reporting_router
 from .poam_workflow import router as poam_router
+from .audit_workflow import router as audit_router
 from .catalog import seed_catalog
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_session, migrate_existing_schema
@@ -28,6 +29,7 @@ app.include_router(auth_router)
 app.include_router(objectives_router)
 app.include_router(reporting_router)
 app.include_router(poam_router)
+app.include_router(audit_router)
 app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origins.split(","), allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 
@@ -46,15 +48,6 @@ class RunRequest(BaseModel):
 class ApprovalRequest(BaseModel):
     approver_id: str = Field(min_length=3, max_length=200)
     mfa_confirmed: bool
-
-
-class AuditReviewRequest(BaseModel):
-    retention_days: int | None = Field(default=None, ge=0, le=36500)
-    review_owner: str | None = Field(default=None, max_length=200)
-    review_frequency: str | None = Field(default=None, max_length=100)
-    required_event_categories: list[str] = Field(default_factory=list, max_length=30)
-    status: str = Field(default="NOT_STARTED", pattern="^(NOT_STARTED|IN_REVIEW|SUPPORTED|GAP|NOT_APPLICABLE)$")
-    notes: str | None = Field(default=None, max_length=5000)
 
 
 class PoamItemRequest(BaseModel):
@@ -614,30 +607,6 @@ def get_assessment(run_id: str, session: Session = Depends(get_session)) -> dict
         raise HTTPException(404, "Assessment run not found")
     findings = session.scalars(select(Finding).where(Finding.run_id == run_id)).all()
     return {"id": run.id, "tenantId": run.tenant_id, "framework": {"version": run.framework_release.version, "status": run.framework_release.status} if run.framework_release else None, "startedAt": run.started_at, "finishedAt": run.finished_at, "findings": [finding_out(item) for item in findings], "auditReview": audit_review_out(run.audit_review) if run.audit_review else None}
-
-
-@app.get("/api/assessments/{run_id}/audit-review")
-def get_audit_review(run_id: str, session: Session = Depends(get_session)) -> dict:
-    review = session.scalar(select(AuditEvidenceReview).where(AuditEvidenceReview.run_id == run_id))
-    if not review:
-        raise HTTPException(404, "Audit review is unavailable for this assessment run.")
-    return audit_review_out(review)
-
-
-@app.put("/api/assessments/{run_id}/audit-review")
-def save_audit_review(run_id: str, body: AuditReviewRequest, session: Session = Depends(get_session)) -> dict:
-    review = session.scalar(select(AuditEvidenceReview).where(AuditEvidenceReview.run_id == run_id))
-    if not review:
-        raise HTTPException(404, "Audit review is unavailable for this assessment run.")
-    review.retention_days = body.retention_days
-    review.review_owner = body.review_owner
-    review.review_frequency = body.review_frequency
-    review.required_event_categories = [item.strip() for item in body.required_event_categories if item.strip()]
-    review.status = body.status
-    review.notes = body.notes
-    session.commit()
-    session.refresh(review)
-    return audit_review_out(review)
 
 
 @app.get("/api/assessments/{run_id}/ssp.md")
