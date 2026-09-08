@@ -222,6 +222,33 @@ class PoamItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     finding: Mapped[Finding | None] = relationship(back_populates="poam_items")
     change_records: Mapped[list["ChangeRecord"]] = relationship(back_populates="poam_item")
+    objective_link: Mapped["ObjectivePoamLink | None"] = relationship(uselist=False)
+
+
+class ObjectiveReviewRevision(Base):
+    __tablename__ = "objective_review_revisions"
+    __table_args__ = (UniqueConstraint("run_id", "objective_identifier", "revision", name="uq_objective_review_revision"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    run_id: Mapped[str] = mapped_column(ForeignKey("assessment_runs.id"), index=True)
+    objective_identifier: Mapped[str] = mapped_column(String(40), index=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    owner: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(32), default="NOT_STARTED")
+    decision: Mapped[str] = mapped_column(String(32), default="NOT_ASSESSED")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    resources: Mapped[list] = mapped_column(JSON, default=list)
+    recorded_by: Mapped[str] = mapped_column(String(200))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ObjectivePoamLink(Base):
+    __tablename__ = "objective_poam_links"
+    __table_args__ = (UniqueConstraint("run_id", "objective_identifier", "request_key", name="uq_objective_poam_request"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    run_id: Mapped[str] = mapped_column(ForeignKey("assessment_runs.id"), index=True)
+    objective_identifier: Mapped[str] = mapped_column(String(40), index=True)
+    poam_id: Mapped[str] = mapped_column(ForeignKey("poam_items.id"), unique=True)
+    request_key: Mapped[str] = mapped_column(String(36))
 
 
 class PolicyException(Base):

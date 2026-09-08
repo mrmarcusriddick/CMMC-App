@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 from .assessment import AUTOMATED_CHECKS, _canonical_hash
 from .auth import protect_api, router as auth_router
 from .screenshot_validation import read_image
+from .objectives import router as objectives_router
 from .catalog import seed_catalog
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_session, migrate_existing_schema
@@ -22,6 +23,7 @@ from .remediation import build_remediation_request, execution_allowed, expiry
 app = FastAPI(title="CMMC Tenant Readiness API", version="0.1.0")
 app.middleware("http")(protect_api)
 app.include_router(auth_router)
+app.include_router(objectives_router)
 app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origins.split(","), allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 
@@ -128,7 +130,7 @@ def audit_review_out(review: AuditEvidenceReview) -> dict:
 
 
 def poam_out(item: PoamItem) -> dict:
-    objective = None
+    objective = item.objective_link.objective_identifier if item.objective_link else None
     if item.finding:
         linked_objective = item.finding.framework_objective or item.finding.objective
         objective = linked_objective.identifier

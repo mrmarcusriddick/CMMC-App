@@ -35,6 +35,14 @@ Use **Capture evidence**, enter a title, then select a screen, window, or tab in
 
 Frontend capture lifecycle tests run with `cd frontend; npm test`. Backend tests in `backend/tests` require pytest and the backend requirements; run `python -m pytest tests` from `backend` with an isolated SQLite `DATABASE_URL`. The screenshot API tests use their own in-memory database, not the live evidence database.
 
+## Objective reviews
+
+Open **Objective reviews** (or select it in the workspace menu on smaller screens), choose an assessment run, and select an objective. The list uses that run's catalog release; older runs without a release are explicitly labeled as unverified seed content. Filter by domain or review status, or search objective wording and owner.
+
+The detail page shows technical findings separately from the human review. Assign an owner, enter review notes and a decision, and attach discovery evidence, screenshots, or local supporting records. A completed review requires an owner, a decision, and rationale. Every save appends a revision with the signed-in operator, timestamp, resource labels, and available evidence hashes. Stale saves return a conflict instead of overwriting a newer review. Reviews do not change automated findings, assessment summaries, or existing SSP exports.
+
+A saved **Not met** decision enables creation of a linked POA&M item, including when no automated finding exists. Retries of the same creation request do not duplicate the item. Links to an objective preserve the assessment run and identifier. Screenshots and other local records are workspace-wide; reviewers must confirm their applicability. The revision history is application-level history in the local database, not a tamper-proof audit service.
+
 ## Tenant access
 
 The app uses an Azure app registration with read-only Microsoft Graph application permissions and tenant-wide admin consent. The Conditional Access check requires `Policy.Read.All`; the audit-log readiness check requires `AuditLog.Read.All`; and privileged-role inventory requires `RoleManagement.Read.Directory`. Configure `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and use either workload identity / managed identity or `AZURE_CLIENT_SECRET`. Set `AZURE_CLOUD=usgovernment` for GCC High, `usgovernmentdod` for DoD, or leave `public` for commercial tenants. Do not use a client secret in production; use a managed identity or Key Vault reference.
