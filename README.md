@@ -35,6 +35,16 @@ Use **Capture evidence**, enter a title, then select a screen, window, or tab in
 
 Frontend capture lifecycle tests run with `cd frontend; npm test`. Backend tests in `backend/tests` require pytest and the backend requirements; run `python -m pytest tests` from `backend` with an isolated SQLite `DATABASE_URL`. The screenshot API tests use their own in-memory database, not the live evidence database.
 
+## Windows endpoint readiness
+
+The hardware workspace now tracks cloud enclave names, cloud tenant IDs, scope, device owners, assigned users, next review dates, and Windows endpoint checks. Other hardware remains available through the platform filter. Scope begins Unknown; an existing inventory CUI flag does not establish enclave membership automatically.
+
+Review Intune enrollment, configuration baseline, BitLocker, Defender, patching, local administrator access, and device compliance as Unknown, Verified, or Gap. Reviewed checks require an owner and rationale; Verified requires supporting evidence. Screenshots retain their hashes in review history. Stale saves are rejected. Create POA&M actions from saved gaps and link them to an objective in an assessment from the same cloud tenant.
+
+The next read-only inventory sync retains documented [Microsoft Graph managed-device fields](https://github.com/microsoftgraph/microsoft-graph-docs-contrib/blob/main/api-reference/v1.0/resources/intune-devices-manageddevice.md), including OS/version, assigned user, check-in time, management agent, device compliance, and encryption state. These observations have collection timestamps and remain separate from reviewer conclusions. Missing fields stay unknown. Generic device encryption does not establish BitLocker configuration; Defender, patching, local administrator controls, and configuration baselines require supporting review evidence. No additional automated protection checks or compliance decisions are implied. Refresh endpoints and reload the saved endpoint after syncing to inspect the newest observation.
+
+There is no policy-exceptions workflow. Navigation, creation/update endpoints, and new exception attachment choices have been removed. Historical database records and saved review history are retained; remove any legacy exception attachment before saving a new objective review.
+
 ## Audit reviews
 
 Open **Audit reviews** to select an assessment, assign its review owner, record retention and required event categories, and schedule the next review. Filter the queue by owner/tenant/run, conclusion, or overdue next-review date (UTC). The schedule is entered explicitly and does not send notifications or automatically roll dates forward.

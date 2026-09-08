@@ -15,12 +15,13 @@ from .objectives import router as objectives_router
 from .reporting import router as reporting_router
 from .poam_workflow import router as poam_router
 from .audit_workflow import router as audit_router
+from .endpoints import router as endpoints_router, capture_observation
 from .catalog import seed_catalog
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_session, migrate_existing_schema
 from .exports import evidence_json, ssp_markdown
 from .graph import GraphClient
-from .models import AssessmentObjective, AssessmentRun, AuditEvidenceReview, ChangeRecord, EvidenceLog, Finding, FrameworkAssessmentObjective, FrameworkPractice, FrameworkRelease, InventoryAsset, ManagedAccount, MicrosoftPlacematRelease, PoamItem, PolicyException, RemediationApproval, RemediationPlan, ScreenshotEvidence, TenantCheckRule
+from .models import AssessmentObjective, AssessmentRun, AuditEvidenceReview, ChangeRecord, EvidenceLog, Finding, FrameworkAssessmentObjective, FrameworkPractice, FrameworkRelease, InventoryAsset, ManagedAccount, MicrosoftPlacematRelease, PoamItem, RemediationApproval, RemediationPlan, ScreenshotEvidence, TenantCheckRule
 from .remediation import build_remediation_request, execution_allowed, expiry
 
 app = FastAPI(title="CMMC Tenant Readiness API", version="0.1.0")
@@ -30,6 +31,7 @@ app.include_router(objectives_router)
 app.include_router(reporting_router)
 app.include_router(poam_router)
 app.include_router(audit_router)
+app.include_router(endpoints_router)
 app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origins.split(","), allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 
@@ -59,17 +61,6 @@ class PoamItemRequest(BaseModel):
     target_date: datetime | None = None
     milestones: list[str] = Field(default_factory=list, max_length=30)
     evidence_reference: str | None = Field(default=None, max_length=5000)
-
-
-class PolicyExceptionRequest(BaseModel):
-    objective_identifier: str | None = Field(default=None, max_length=40)
-    title: str = Field(min_length=3, max_length=240)
-    rationale: str = Field(min_length=3, max_length=5000)
-    compensating_controls: str | None = Field(default=None, max_length=5000)
-    owner: str | None = Field(default=None, max_length=200)
-    status: str = Field(default="DRAFT", pattern="^(DRAFT|SUBMITTED|APPROVED|REJECTED|EXPIRED|CLOSED)$")
-    expires_at: datetime | None = None
-    reviewed_by: str | None = Field(default=None, max_length=200)
 
 
 class ManagedAccountRequest(BaseModel):
@@ -132,10 +123,6 @@ def poam_out(item: PoamItem) -> dict:
         linked_objective = item.finding.framework_objective or item.finding.objective
         objective = linked_objective.identifier
     return {"id": item.id, "findingId": item.finding_id, "objective": objective, "title": item.title, "description": item.description, "owner": item.owner, "status": item.status, "targetDate": item.target_date, "milestones": item.milestones, "evidenceReference": item.evidence_reference, "createdAt": item.created_at, "updatedAt": item.updated_at}
-
-
-def exception_out(item: PolicyException) -> dict:
-    return {"id": item.id, "objectiveIdentifier": item.objective_identifier, "title": item.title, "rationale": item.rationale, "compensatingControls": item.compensating_controls, "owner": item.owner, "status": item.status, "expiresAt": item.expires_at, "reviewedBy": item.reviewed_by, "createdAt": item.created_at, "updatedAt": item.updated_at}
 
 
 def account_out(item: ManagedAccount) -> dict:
@@ -213,7 +200,7 @@ async def upload_screenshot(request: Request, title: str = "", objective_identif
     if content_type not in {"image/png", "image/jpeg"}:
         raise HTTPException(415, "Only PNG and JPEG screenshots are accepted.")
     image_data = await read_image(request, content_type)
-    if related_record_type and related_record_type not in {"ASSESSMENT", "ACCOUNT", "ASSET", "CHANGE", "POAM", "POLICY_EXCEPTION"}:
+    if related_record_type and related_record_type not in {"ASSESSMENT", "ACCOUNT", "ASSET", "CHANGE", "POAM"}:
         raise HTTPException(422, "Unsupported related record type.")
     item = ScreenshotEvidence(title=normalized_title, objective_identifier=objective_identifier.strip() if objective_identifier else None, related_record_type=related_record_type, related_record_id=related_record_id.strip() if related_record_id else None, captured_by=get_settings().app_username, contains_cui=contains_cui, notes=notes.strip() if notes else None, content_type=content_type, byte_size=len(image_data), sha256=hashlib.sha256(image_data).hexdigest(), image_data=image_data)
     session.add(item)
@@ -258,48 +245,6 @@ def create_poam_item(body: PoamItemRequest, session: Session = Depends(get_sessi
     session.commit()
     session.refresh(item)
     return poam_out(item)
-
-
-@app.get("/api/exceptions")
-def list_policy_exceptions(session: Session = Depends(get_session)) -> dict:
-    items = session.scalars(select(PolicyException).order_by(PolicyException.updated_at.desc()).limit(100)).all()
-    return {"items": [exception_out(item) for item in items]}
-
-
-@app.post("/api/exceptions", status_code=status.HTTP_201_CREATED)
-def create_policy_exception(body: PolicyExceptionRequest, session: Session = Depends(get_session)) -> dict:
-    item = PolicyException(
-        objective_identifier=body.objective_identifier.strip() if body.objective_identifier else None,
-        title=body.title.strip(),
-        rationale=body.rationale.strip(),
-        compensating_controls=body.compensating_controls.strip() if body.compensating_controls else None,
-        owner=body.owner.strip() if body.owner else None,
-        status=body.status,
-        expires_at=body.expires_at,
-        reviewed_by=body.reviewed_by.strip() if body.reviewed_by else None,
-    )
-    session.add(item)
-    session.commit()
-    session.refresh(item)
-    return exception_out(item)
-
-
-@app.patch("/api/exceptions/{item_id}")
-def update_policy_exception(item_id: str, body: PolicyExceptionRequest, session: Session = Depends(get_session)) -> dict:
-    item = session.get(PolicyException, item_id)
-    if not item:
-        raise HTTPException(404, "Policy exception not found.")
-    item.objective_identifier = body.objective_identifier.strip() if body.objective_identifier else None
-    item.title = body.title.strip()
-    item.rationale = body.rationale.strip()
-    item.compensating_controls = body.compensating_controls.strip() if body.compensating_controls else None
-    item.owner = body.owner.strip() if body.owner else None
-    item.status = body.status
-    item.expires_at = body.expires_at
-    item.reviewed_by = body.reviewed_by.strip() if body.reviewed_by else None
-    session.commit()
-    session.refresh(item)
-    return exception_out(item)
 
 
 @app.get("/api/accounts")
@@ -532,7 +477,7 @@ def upsert_synced_asset(session: Session, *, asset_type: str, source: str, sourc
 async def sync_inventory_from_tenant(session: Session = Depends(get_session)) -> dict:
     client = GraphClient()
     try:
-        devices = await client.get_collection("/deviceManagement/managedDevices?$select=id,deviceName,serialNumber,manufacturer,model,operatingSystem,osVersion,userPrincipalName,lastSyncDateTime&$top=999", "DeviceManagementManagedDevices.Read.All")
+        devices = await client.get_collection("/deviceManagement/managedDevices?$select=id,deviceName,serialNumber,manufacturer,model,operatingSystem,osVersion,userPrincipalName,lastSyncDateTime,managementAgent,complianceState,isEncrypted&$top=999", "DeviceManagementManagedDevices.Read.All")
         detected_apps = await client.get_collection("/deviceManagement/detectedApps?$select=id,displayName,version,publisher,platform,deviceCount&$top=999", "DeviceManagementManagedDevices.Read.All")
     except (PermissionError, RuntimeError, httpx.HTTPError) as exc:
         raise graph_sync_error(exc) from exc
@@ -552,6 +497,9 @@ async def sync_inventory_from_tenant(session: Session = Depends(get_session)) ->
             continue
         created = upsert_synced_asset(session, asset_type="HARDWARE", source="Microsoft Graph /deviceManagement/managedDevices", source_id=source_id, asset_identifier=f"intune-device:{source_id}", name=str(device.get("deviceName") or source_id), publisher_or_manufacturer=device.get("manufacturer") or None, version_or_model=device.get("model") or None, owner=device.get("userPrincipalName") or None, system_role=" · ".join(part for part in (device.get("operatingSystem"), device.get("osVersion")) if part) or None, synced_at=synced_at)
         counts["hardware"]["created" if created else "updated"] += 1
+        session.flush()
+        endpoint = session.scalar(select(InventoryAsset).where(InventoryAsset.asset_type == "HARDWARE", InventoryAsset.asset_identifier == f"intune-device:{source_id}"))
+        capture_observation(session, endpoint, device, get_settings().azure_tenant_id, synced_at)
     for app in detected_apps:
         source_id = str(app.get("id") or "")
         if not source_id:

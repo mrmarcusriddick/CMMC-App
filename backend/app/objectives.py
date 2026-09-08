@@ -13,14 +13,14 @@ from .config import get_settings
 from .database import get_session
 from .models import (AssessmentRun, AssessmentObjective, FrameworkAssessmentObjective, FrameworkPractice,
                      Finding, EvidenceLog, ScreenshotEvidence, ManagedAccount, InventoryAsset, ChangeRecord,
-                     PolicyException, ObjectiveReviewRevision, ObjectivePoamLink, PoamItem)
+                     ObjectiveReviewRevision, ObjectivePoamLink, PoamItem)
 
 from .poam_workflow import rereview_requests
 
 router = APIRouter(prefix="/api")
-ResourceKind = Literal["SCREENSHOT", "DISCOVERY", "ACCOUNT", "ASSET", "CHANGE", "POLICY_EXCEPTION"]
+ResourceKind = Literal["SCREENSHOT", "DISCOVERY", "ACCOUNT", "ASSET", "CHANGE"]
 RESOURCE_MODELS = {"SCREENSHOT": ScreenshotEvidence, "DISCOVERY": EvidenceLog, "ACCOUNT": ManagedAccount,
-                   "ASSET": InventoryAsset, "CHANGE": ChangeRecord, "POLICY_EXCEPTION": PolicyException}
+                   "ASSET": InventoryAsset, "CHANGE": ChangeRecord}
 
 
 def run_catalog(db, run_id):
@@ -116,7 +116,7 @@ def available_resources(run_id: str, identifier: str, kind: ResourceKind = "SCRE
         field = EvidenceLog.source
     else:
         field = {"SCREENSHOT": ScreenshotEvidence.title, "ACCOUNT": ManagedAccount.account_identifier,
-                 "ASSET": InventoryAsset.name, "CHANGE": ChangeRecord.title, "POLICY_EXCEPTION": PolicyException.title}[kind]
+                 "ASSET": InventoryAsset.name, "CHANGE": ChangeRecord.title}[kind]
     if q.strip():
         query = query.where(field.icontains(q.strip(), autoescape=True))
     rows = db.scalars(query.order_by(field, model.id).limit(101)).all()
