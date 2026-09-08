@@ -12,6 +12,7 @@ from .assessment import AUTOMATED_CHECKS, _canonical_hash
 from .auth import protect_api, router as auth_router
 from .screenshot_validation import read_image
 from .objectives import router as objectives_router
+from .reporting import router as reporting_router
 from .catalog import seed_catalog
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_session, migrate_existing_schema
@@ -24,6 +25,7 @@ app = FastAPI(title="CMMC Tenant Readiness API", version="0.1.0")
 app.middleware("http")(protect_api)
 app.include_router(auth_router)
 app.include_router(objectives_router)
+app.include_router(reporting_router)
 app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origins.split(","), allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 

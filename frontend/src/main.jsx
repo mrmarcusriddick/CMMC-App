@@ -3,9 +3,10 @@ import { createRoot } from 'react-dom/client';
 import './operations.css';
 import { captureStill } from './capture.mjs';
 import ObjectiveWorkspace from './ObjectiveWorkspace';
+import AssessmentSummary from './AssessmentSummary';
 
 const navGroups = [
-  { label: 'WORKSPACE', items: [['overview', '◈', 'Overview'], ['assessments', '▤', 'Assessment runs'], ['objectives', '◎', 'Objective reviews'], ['evidence', '▧', 'Evidence vault'], ['screenshots', '▣', 'Capture evidence']] },
+  { label: 'WORKSPACE', items: [['overview', '◈', 'Overview'], ['assessments', '▤', 'Assessment runs'], ['objectives', '◎', 'Objective reviews'], ['summary', '▥', 'Assessment summary'], ['evidence', '▧', 'Evidence vault'], ['screenshots', '▣', 'Capture evidence']] },
   { label: 'DATABASES', items: [['accounts', '♧', 'Account management'], ['changes', '⌁', 'Change management'], ['software', '▣', 'Software inventory'], ['hardware', '▤', 'Hardware inventory'], ['poam', '◎', 'POA&M'], ['exceptions', '◇', 'Policy exceptions']] },
   { label: 'OPERATIONS', items: [['audit', '✓', 'Audit reviews']] },
 ];
@@ -28,7 +29,7 @@ function App() {
   const [loginForm, setLoginForm] = useState({ username: 'localadmin', password: '' });
   const [signingIn, setSigningIn] = useState(false);
   const [objectiveDirty, setObjectiveDirty] = useState(false);
-  const [page, setPage] = useState(() => window.location.hash.startsWith('#objectives') ? 'objectives' : 'overview');
+  const [page, setPage] = useState(() => window.location.hash.startsWith('#objectives') ? 'objectives' : window.location.hash.startsWith('#summary') ? 'summary' : 'overview');
   const [summary, setSummary] = useState(null);
   const [overview, setOverview] = useState(null);
   const [assessments, setAssessments] = useState([]);
@@ -93,7 +94,7 @@ function App() {
     if (next === page) return;
     if (page === 'objectives' && objectiveDirty && !window.confirm('Leave the objective review? Unsaved changes will be lost.')) return;
     setPage(next); setQuery('');
-    if (next !== 'objectives') window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (next === 'summary' || next === 'objectives') { const run = new URLSearchParams(window.location.hash.split('?')[1] || '').get('run'); window.history.replaceState(null, '', '#' + next + (run ? '?' + new URLSearchParams({ run }) : '')); } else window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }
 
   async function runAssessment(event) {
@@ -200,7 +201,7 @@ function App() {
   const filteredAccounts = useMemo(() => accounts.filter(item => `${item.accountIdentifier} ${item.displayName || ''} ${item.owner || ''} ${item.privilegeLevel} ${item.mfaStatus}`.toLowerCase().includes(query.toLowerCase())), [accounts, query]);
   const filteredAssets = type => assets.filter(item => item.assetType === type && `${item.assetIdentifier} ${item.name} ${item.publisherOrManufacturer || ''} ${item.owner || ''} ${item.authorizationStatus}`.toLowerCase().includes(query.toLowerCase()));
   const filteredChanges = useMemo(() => changes.filter(item => `${item.title} ${item.owner || ''} ${item.changeType} ${item.riskLevel} ${item.status}`.toLowerCase().includes(query.toLowerCase())), [changes, query]);
-  const pageTitle = { overview: 'Overview', objectives: 'Objective reviews', assessments: 'Assessment runs', evidence: 'Evidence vault', screenshots: 'Capture evidence', accounts: 'Account management', changes: 'Change management', software: 'Software inventory', hardware: 'Hardware inventory', poam: 'POA&M', audit: 'Audit reviews', exceptions: 'Policy exceptions' }[page];
+  const pageTitle = { overview: 'Overview', summary: 'Assessment summary', objectives: 'Objective reviews', assessments: 'Assessment runs', evidence: 'Evidence vault', screenshots: 'Capture evidence', accounts: 'Account management', changes: 'Change management', software: 'Software inventory', hardware: 'Hardware inventory', poam: 'POA&M', audit: 'Audit reviews', exceptions: 'Policy exceptions' }[page];
   const currentAssetType = page === 'software' ? 'SOFTWARE' : 'HARDWARE';
   const counts = overview?.findings || { compliant: 0, manualReview: 0, nonCompliant: 0 };
   const runningFindings = runResult?.findings || [];
@@ -212,8 +213,9 @@ function App() {
     <aside className="sidebar"><div className="brand"><span className="brand-mark">◇</span><div><b>CMMC Compass</b><small>Tenant readiness</small></div></div><nav>{navGroups.map(group => <div className="nav-group" key={group.label}><p>{group.label}</p>{group.items.map(([id, icon, label]) => <button key={id} className={page === id ? 'nav-item active' : 'nav-item'} onClick={() => goToPage(id)}><span>{icon}</span>{label}{id === 'assessments' && <em>{assessments.length}</em>}{id === 'evidence' && <em>{evidence.length}</em>}{id === 'screenshots' && <em>{screenshots.length}</em>}{id === 'accounts' && <em>{accounts.length}</em>}{id === 'changes' && <em>{changes.length}</em>}{id === 'software' && <em>{assets.filter(item => item.assetType === 'SOFTWARE').length}</em>}{id === 'hardware' && <em>{assets.filter(item => item.assetType === 'HARDWARE').length}</em>}{id === 'poam' && <em>{poam.length}</em>}{id === 'exceptions' && <em>{exceptions.length}</em>}</button>)}</div>)}</nav><div className="sidebar-footer"><span className="dot"/> GCC High connected<br/><small>Read-only discovery</small></div></aside>
     <main className="workspace"><header className="topbar"><div><span className="eyebrow">CMMC LEVEL 2 · GCC HIGH</span><h1>{pageTitle}</h1></div><div className="toolbar"><label className="search">⌕<input value={query} onChange={event => setQuery(event.target.value)} placeholder={page === 'evidence' ? 'Search evidence' : 'Search records'}/></label><button className="export" onClick={() => goToPage('evidence')}>⇩ Evidence exports</button><button className="export" onClick={signOut}>Sign out</button></div></header>
       <select className="mobile-navigation" aria-label="Workspace page" value={page} onChange={event => goToPage(event.target.value)}>{navGroups.flatMap(group => group.items).map(([id, , label]) => <option key={id} value={id}>{label}</option>)}</select>
+      {page === 'summary' && <AssessmentSummary runs={assessments} onAuthExpired={() => setSession(null)} onOpenObjective={(run, objective) => { window.history.replaceState(null, '', '#objectives?' + new URLSearchParams({ run, objective })); setPage('objectives'); }}/>}
       {page === 'objectives' && <ObjectiveWorkspace runs={assessments} onAuthExpired={() => setSession(null)} onDirty={setObjectiveDirty} onRecordsChanged={loadData}/>}
-      {page !== 'objectives' && summary?.framework?.status === 'SOURCE_VALIDATED' && <div className="baseline"><b>Source-validated baseline</b><span>CMMC Level 2 v{summary.framework.version} · 110 practices · 320 objectives</span></div>}
+      {!['objectives', 'summary'].includes(page) && summary?.framework?.status === 'SOURCE_VALIDATED' && <div className="baseline"><b>Source-validated baseline</b><span>CMMC Level 2 v{summary.framework.version} · 110 practices · 320 objectives</span></div>}
       {error && <div className="alert error-alert">{error}</div>}{message && <div className="alert success-alert">{message}</div>}
       {page === 'overview' && <>
         <section className="metric-grid"><article><span>Assessment runs</span><b>{overview?.assessmentCount ?? '—'}</b><small>Local evidence history</small></article><article><span>Compliant findings</span><b>{counts.compliant}</b><small>Technical signals, not certification</small></article><article><span>Manual review</span><b>{counts.manualReview}</b><small>Assessor action required</small></article><article><span>Open gaps</span><b>{counts.nonCompliant}</b><small>Requires remediation decision</small></article></section>

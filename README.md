@@ -43,6 +43,14 @@ The detail page shows technical findings separately from the human review. Assig
 
 A saved **Not met** decision enables creation of a linked POA&M item, including when no automated finding exists. Retries of the same creation request do not duplicate the item. Links to an objective preserve the assessment run and identifier. Screenshots and other local records are workspace-wide; reviewers must confirm their applicability. The revision history is application-level history in the local database, not a tamper-proof audit service.
 
+## Assessment summary and review reports
+
+Open **Assessment summary** and select a run to see domain progress, finalized human decisions, and queues for missing owners, missing attachments, or pending decisions. Progress counts the latest saved review for every objective in that run's catalog. Only complete reviews contribute to finalized decision counts; provisional decisions remain separate. Not-applicable objectives remain in the workflow-progress denominator. These totals measure review work, not certification or a compliance score.
+
+Linked POA&M items include both direct objective links and links through findings from the selected run. An item is overdue when its target UTC date is before today and its status is not complete, closed, or cancelled. Unlinked workspace gaps are excluded. Queue filters do not change the exported report.
+
+Download review JSON or Markdown for a current snapshot containing all objective statements, latest reviewer decisions, rationale, revision attribution, evidence references and hashes, technical findings, and linked gaps. These new reports supplement existing SSP and raw discovery exports. Refresh the summary to include changes made in another session.
+
 ## Tenant access
 
 The app uses an Azure app registration with read-only Microsoft Graph application permissions and tenant-wide admin consent. The Conditional Access check requires `Policy.Read.All`; the audit-log readiness check requires `AuditLog.Read.All`; and privileged-role inventory requires `RoleManagement.Read.Directory`. Configure `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and use either workload identity / managed identity or `AZURE_CLIENT_SECRET`. Set `AZURE_CLOUD=usgovernment` for GCC High, `usgovernmentdod` for DoD, or leave `public` for commercial tenants. Do not use a client secret in production; use a managed identity or Key Vault reference.
